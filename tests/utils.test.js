@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePath } from '../utils.js';
+import { normalizePath } from '../src/lib/utils.js';
 
 describe('normalizePath', () => {
   it('passes through a clean path unchanged', () => {

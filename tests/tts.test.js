@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TTSController } from '../tts.js';
+import { TTSController } from '../src/lib/tts.js';
 
 // ── Mock Web Speech API ───────────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 // ── Mock highlighter (uses scrollIntoView not available in jsdom) ──
-vi.mock('../highlighter.js', () => ({
+vi.mock('../src/lib/highlighter.js', () => ({
   highlight: vi.fn(),
   clearHighlight: vi.fn(),
   annotateChapter: vi.fn(() => []),

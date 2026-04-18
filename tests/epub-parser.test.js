@@ -5,7 +5,7 @@ import {
   buildChapterList,
   parseNavToc,
   parseNcxToc,
-} from '../epub-parser.js';
+} from '../src/lib/epub-parser.js';
 
 // ── extractOpfPath ────────────────────────────────────────────────────────────
 

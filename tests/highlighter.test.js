@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { segmentSentences, escapeHtml, annotateChapter } from '../highlighter.js';
+import { segmentSentences, escapeHtml, annotateChapter } from '../src/lib/highlighter.js';
 
 // ── segmentSentences ──────────────────────────────────────────────────────────
 

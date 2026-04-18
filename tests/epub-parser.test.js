@@ -1,11 +1,28 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   extractOpfPath,
   parseOpf,
   buildChapterList,
   parseNavToc,
   parseNcxToc,
+  parseEpub,
+  loadChapter,
 } from '../src/lib/epub-parser.js';
+
+// Mock JSZip — parseEpub needs it but tests shouldn't require real ZIP binaries
+vi.mock('jszip', () => ({ default: { loadAsync: vi.fn() } }));
+import JSZip from 'jszip';
+
+// Build a fake in-memory zip from a { path: content } map
+function fakeZip(entries) {
+  return {
+    file: (path) => {
+      const content = entries[path] ?? entries[decodeURIComponent(path)] ?? null;
+      if (!content) return null;
+      return { async: () => Promise.resolve(content) };
+    },
+  };
+}
 
 // ── extractOpfPath ────────────────────────────────────────────────────────────
 
@@ -251,5 +268,217 @@ describe('parseNcxToc', () => {
     parseNcxToc(xml, map);
     expect(Object.keys(map)).toHaveLength(1);
     expect(map['ch1.xhtml']).toBe('OK');
+  });
+});
+
+// ── parseEpub ─────────────────────────────────────────────────────────────────
+
+const CONTAINER_XML = `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+
+const FULL_OPF = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>测试书籍</dc:title>
+    <dc:creator>测试作者</dc:creator>
+    <dc:language>zh</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="Text/ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="Text/ch2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>`;
+
+const NAV_HTML_FULL = `<!DOCTYPE html>
+<html xmlns:epub="http://www.idpf.org/2007/ops">
+<body>
+  <nav epub:type="toc">
+    <ol>
+      <li><a href="Text/ch1.xhtml">第一章</a></li>
+      <li><a href="Text/ch2.xhtml">第二章</a></li>
+    </ol>
+  </nav>
+</body></html>`;
+
+const OPF_WITH_NCX = `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>NCX 书籍</dc:title>
+    <dc:language>zh</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="Text/ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine><itemref idref="ch1"/></spine>
+</package>`;
+
+const NCX_XML_FULL = `<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/">
+  <navMap>
+    <navPoint>
+      <navLabel><text>序章</text></navLabel>
+      <content src="Text/ch1.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>`;
+
+describe('parseEpub', () => {
+  beforeEach(() => {
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      'OEBPS/content.opf': FULL_OPF,
+      'OEBPS/nav.xhtml': NAV_HTML_FULL,
+    }));
+  });
+
+  it('returns title, author, language from metadata', async () => {
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.title).toBe('测试书籍');
+    expect(book.author).toBe('测试作者');
+    expect(book.language).toBe('zh');
+  });
+
+  it('falls back to filename when title metadata is empty', async () => {
+    const opf = FULL_OPF.replace('<dc:title>测试书籍</dc:title>', '');
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      'OEBPS/content.opf': opf,
+      'OEBPS/nav.xhtml': NAV_HTML_FULL,
+    }));
+    const book = await parseEpub(new File([], 'my-novel.epub'));
+    expect(book.title).toBe('my-novel');
+  });
+
+  it('builds chapter list in spine order', async () => {
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.chapters).toHaveLength(2);
+    expect(book.chapters[0].href).toBe('Text/ch1.xhtml');
+    expect(book.chapters[1].href).toBe('Text/ch2.xhtml');
+  });
+
+  it('attaches TOC titles from EPUB 3 nav document', async () => {
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.chapters[0].title).toBe('第一章');
+    expect(book.chapters[1].title).toBe('第二章');
+  });
+
+  it('falls back to NCX titles when no nav item exists', async () => {
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      'OEBPS/content.opf': OPF_WITH_NCX,
+      'OEBPS/toc.ncx': NCX_XML_FULL,
+    }));
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.chapters[0].title).toBe('序章');
+  });
+
+  it('keeps placeholder title when neither nav nor NCX is available', async () => {
+    const opfNoToc = FULL_OPF.replace(
+      '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+      ''
+    );
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      'OEBPS/content.opf': opfNoToc,
+    }));
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.chapters[0].title).toBe('第 1 章');
+  });
+
+  it('matches TOC title by bare filename across different directory prefixes', async () => {
+    // Nav uses bare "ch1.xhtml", spine has "Text/ch1.xhtml" — should still match
+    const navCrossDir = NAV_HTML_FULL
+      .replace('href="Text/ch1.xhtml"', 'href="ch1.xhtml"')
+      .replace('href="Text/ch2.xhtml"', 'href="ch2.xhtml"');
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      'OEBPS/content.opf': FULL_OPF,
+      'OEBPS/nav.xhtml': navCrossDir,
+    }));
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(book.chapters[0].title).toBe('第一章');
+  });
+
+  it('returns zip object and opfDir for downstream use', async () => {
+    const book = await parseEpub(new File([], 'test.epub'));
+    expect(typeof book.zip.file).toBe('function');
+    expect(book.opfDir).toBe('OEBPS/');
+  });
+
+  it('throws when container.xml is missing from the ZIP', async () => {
+    JSZip.loadAsync.mockResolvedValue(fakeZip({}));
+    await expect(parseEpub(new File([], 'test.epub')))
+      .rejects.toThrow('META-INF/container.xml');
+  });
+
+  it('throws when container.xml has no OPF path', async () => {
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': '<container><rootfiles/></container>',
+    }));
+    await expect(parseEpub(new File([], 'test.epub')))
+      .rejects.toThrow('OPF');
+  });
+
+  it('throws when the OPF file itself is missing from the ZIP', async () => {
+    JSZip.loadAsync.mockResolvedValue(fakeZip({
+      'META-INF/container.xml': CONTAINER_XML,
+      // content.opf intentionally omitted
+    }));
+    await expect(parseEpub(new File([], 'test.epub')))
+      .rejects.toThrow('OEBPS/content.opf');
+  });
+});
+
+// ── loadChapter ───────────────────────────────────────────────────────────────
+
+describe('loadChapter', () => {
+  it('returns the body innerHTML of a chapter file', async () => {
+    const zip = fakeZip({
+      'OEBPS/Text/ch1.xhtml': '<html><body><p>Hello World</p></body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/ch1.xhtml' });
+    expect(html).toContain('<p>Hello World</p>');
+  });
+
+  it('strips <script> elements', async () => {
+    const zip = fakeZip({
+      'OEBPS/Text/ch1.xhtml': '<html><body><p>Text</p><script>alert(1)</script></body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/ch1.xhtml' });
+    expect(html).not.toMatch(/<script/i);
+    expect(html).toContain('<p>Text</p>');
+  });
+
+  it('strips <style> elements', async () => {
+    const zip = fakeZip({
+      'OEBPS/Text/ch1.xhtml': '<html><head><style>body{color:red}</style></head><body><p>Text</p></body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/ch1.xhtml' });
+    expect(html).not.toMatch(/<style/i);
+    expect(html).toContain('<p>Text</p>');
+  });
+
+  it('returns empty string for an empty body', async () => {
+    const zip = fakeZip({
+      'OEBPS/Text/empty.xhtml': '<html><body></body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/empty.xhtml' });
+    expect(html).toBe('');
+  });
+
+  it('throws when the chapter file is not found in the ZIP', async () => {
+    const zip = fakeZip({});
+    await expect(loadChapter(zip, { fullPath: 'OEBPS/Text/missing.xhtml' }))
+      .rejects.toThrow('OEBPS/Text/missing.xhtml');
   });
 });

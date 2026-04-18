@@ -66,7 +66,7 @@ export function clearHighlight() {
 
 export function escapeHtml(text) {
   return text
-    .replace(/&/g, '&amp;')
+    .replace(/&(?![a-zA-Z#]\w+;)/g, '&amp;')  // skip already-valid entities
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');

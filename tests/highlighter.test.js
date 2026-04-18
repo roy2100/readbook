@@ -68,18 +68,15 @@ describe('escapeHtml', () => {
     expect(escapeHtml('<b>Tom & "Jerry"</b>')).toBe('&lt;b&gt;Tom &amp; &quot;Jerry&quot;&lt;/b&gt;');
   });
 
-  it('escapes ampersand before angle brackets (order matters)', () => {
-    // If & is not escaped first, &lt; would become &amp;lt; — double-escape
-    // Correct: & → &amp; first, so plain & becomes &amp;
-    const result = escapeHtml('a & b');
-    expect(result).toBe('a &amp; b');
+  it('does not double-escape existing HTML entities', () => {
+    expect(escapeHtml('&lt;div&gt;')).toBe('&lt;div&gt;');
+    expect(escapeHtml('&amp;')).toBe('&amp;');
+    expect(escapeHtml('&quot;hello&quot;')).toBe('&quot;hello&quot;');
   });
 
-  it('double-escapes pre-escaped entities (known behavior to document)', () => {
-    // Input already contains &lt; → escapeHtml escapes the & → &amp;lt;
-    // This is the double-escape bug. Test documents current behavior.
-    const result = escapeHtml('&lt;div&gt;');
-    expect(result).toBe('&amp;lt;div&amp;gt;');
+  it('still escapes bare & not part of an entity', () => {
+    expect(escapeHtml('R&D')).toBe('R&amp;D');
+    expect(escapeHtml('a & b')).toBe('a &amp; b');
   });
 
   it('handles empty string', () => {

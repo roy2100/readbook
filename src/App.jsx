@@ -11,8 +11,11 @@ import { useVoices } from './hooks/useVoices.js';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [rate, setRateState] = useState(1);
-  const [voiceURI, setVoiceURI] = useState('');
+  const [rate, setRateState] = useState(() => {
+    const saved = parseFloat(localStorage.getItem('tts-rate'));
+    return isNaN(saved) ? 1 : saved;
+  });
+  const [voiceURI, setVoiceURI] = useState(() => localStorage.getItem('tts-voice') ?? '');
 
   const { toast, showToast } = useToast();
   const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter } = useBook();
@@ -50,14 +53,24 @@ export default function App() {
     playFrom(index);
   }, [playFrom]);
 
+  // Apply saved rate to TTS controller on mount
+  useEffect(() => { setRate(rate); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply saved voice once voices are loaded
+  useEffect(() => {
+    if (allVoices.length > 0 && voiceURI) setVoice(voiceURI);
+  }, [allVoices]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleRateChange = useCallback((newRate) => {
     setRateState(newRate);
     setRate(newRate);
+    localStorage.setItem('tts-rate', newRate);
   }, [setRate]);
 
   const handleVoiceChange = useCallback((uri) => {
     setVoiceURI(uri);
     setVoice(uri);
+    localStorage.setItem('tts-voice', uri);
   }, [setVoice]);
 
   // Auto-advance to next chapter when TTS finishes

@@ -87,7 +87,7 @@ export default function Controls({
         <label className="ctrl-label">
           <span>速度</span>
           <Form.Select size="sm" value={rate} onChange={e => onRateChange(parseFloat(e.target.value))} style={{ width: 'auto' }}>
-            {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
+            {[0.5, 0.75, 0.8, 0.9, 1, 1.25, 1.5, 2].map(r => (
               <option key={r} value={r}>{r === 1 ? '1.0×' : `${r}×`}</option>
             ))}
           </Form.Select>

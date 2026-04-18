@@ -16,7 +16,7 @@ export default function App() {
 
   const { toast, showToast } = useToast();
   const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter } = useBook();
-  const { ttsState, load, play, pause, stop, setRate, setVoice, getVoices } = useTTS();
+  const { ttsState, load, play, pause, stop, setRate, setVoice, getVoices, playFrom } = useTTS();
   const allVoices = useVoices();
 
   const currentChapter = book?.chapters[currentIndex] ?? null;
@@ -45,6 +45,10 @@ export default function App() {
   const handleSentencesReady = useCallback((sentences) => {
     load(sentences);
   }, [load]);
+
+  const handleSentenceClick = useCallback((index) => {
+    playFrom(index);
+  }, [playFrom]);
 
   const handleRateChange = useCallback((newRate) => {
     setRateState(newRate);
@@ -116,6 +120,7 @@ export default function App() {
           currentChapter={currentChapter}
           isLoading={isLoading}
           onSentencesReady={handleSentencesReady}
+          onSentenceClick={handleSentenceClick}
         />
       </div>
 

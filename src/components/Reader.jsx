@@ -2,14 +2,29 @@ import { useRef, useEffect } from 'react';
 import { annotateChapter } from '../lib/highlighter.js';
 import { resolveImages } from '../hooks/useBook.js';
 
-export default function Reader({ chapterHtml, book, currentChapter, isLoading, onSentencesReady }) {
+export default function Reader({ chapterHtml, book, currentChapter, isLoading, onSentencesReady, onSentenceClick }) {
   const readerRef = useRef(null);
   const contentRef = useRef(null);
   const onReadyRef = useRef(onSentencesReady);
   useEffect(() => { onReadyRef.current = onSentencesReady; });
+  const onSentenceClickRef = useRef(onSentenceClick);
+  useEffect(() => { onSentenceClickRef.current = onSentenceClick; });
 
   useEffect(() => {
     if (readerRef.current) readerRef.current.scrollTop = 0;
+  }, [chapterHtml]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+    const handleClick = (e) => {
+      const span = e.target.closest('.tts-sentence');
+      if (!span) return;
+      const idx = parseInt(span.dataset.ttsIdx, 10);
+      if (!isNaN(idx)) onSentenceClickRef.current?.(idx);
+    };
+    container.addEventListener('click', handleClick);
+    return () => container.removeEventListener('click', handleClick);
   }, [chapterHtml]);
 
   useEffect(() => {

@@ -38,6 +38,15 @@ export class TTSController {
     this._notify('playing');
   }
 
+  playFrom(index) {
+    if (this.queue.length === 0 || index < 0 || index >= this.queue.length) return;
+    this.synth.cancel();
+    this.isPlaying = true;
+    this.isPaused = false;
+    this._speakFrom(index);
+    this._notify('playing');
+  }
+
   pause() {
     if (!this.isPlaying) return;
     this.pausedIndex = this.currentIndex;

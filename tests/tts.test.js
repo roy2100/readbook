@@ -312,6 +312,65 @@ describe('TTSController — auto-advance on utterance end', () => {
   });
 });
 
+// ── playFrom ──────────────────────────────────────────────────────────────────
+
+describe('TTSController.playFrom', () => {
+  it('starts speaking from the given index', () => {
+    const tts = new TTSController();
+    const sentences = makeSentences(5);
+    tts.load(sentences);
+    tts.playFrom(3);
+    expect(tts.isPlaying).toBe(true);
+    expect(tts.currentIndex).toBe(3);
+    const utt = getLastUtterance();
+    expect(utt.text).toBe(sentences[3].text);
+  });
+
+  it('cancels current speech before starting from new index', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences(5));
+    tts.play();
+    mockSynth.speak.mockClear();
+    tts.playFrom(2);
+    expect(mockSynth.cancel).toHaveBeenCalled();
+    expect(mockSynth.speak).toHaveBeenCalledOnce();
+  });
+
+  it('notifies "playing" state', () => {
+    const tts = new TTSController();
+    const states = [];
+    tts.onStateChange = s => states.push(s);
+    tts.load(makeSentences(3));
+    tts.playFrom(1);
+    expect(states).toContain('playing');
+  });
+
+  it('does nothing when queue is empty', () => {
+    const tts = new TTSController();
+    tts.playFrom(0);
+    expect(tts.isPlaying).toBe(false);
+    expect(mockSynth.speak).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when index is out of range', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences(3));
+    tts.playFrom(10);
+    expect(tts.isPlaying).toBe(false);
+    expect(mockSynth.speak).not.toHaveBeenCalled();
+  });
+
+  it('clears paused state when called while paused', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences(5));
+    tts.play();
+    tts.pause();
+    tts.playFrom(2);
+    expect(tts.isPaused).toBe(false);
+    expect(tts.isPlaying).toBe(true);
+  });
+});
+
 // ── setRate ───────────────────────────────────────────────────────────────────
 
 describe('TTSController.setRate', () => {

@@ -24,6 +24,7 @@ export function useTTS() {
   const setRate = useCallback((rate) => controllerRef.current.setRate(rate), []);
   const setVoice = useCallback((uri) => controllerRef.current.setVoice(uri), []);
   const getVoices = useCallback((lang) => controllerRef.current.getVoices(lang), []);
+  const playFrom = useCallback((index) => controllerRef.current.playFrom(index), []);
 
-  return { ttsState, load, play, pause, stop, setRate, setVoice, getVoices };
+  return { ttsState, load, play, pause, stop, setRate, setVoice, getVoices, playFrom };
 }

@@ -18,10 +18,11 @@ export default function Reader({ chapterHtml, book, currentChapter, isLoading, o
     const container = contentRef.current;
     if (!container) return;
     const handleClick = (e) => {
+      if (!onSentenceClickRef.current) return;
       const span = e.target.closest('.tts-sentence');
       if (!span) return;
       const idx = parseInt(span.dataset.ttsIdx, 10);
-      if (!isNaN(idx)) onSentenceClickRef.current?.(idx);
+      if (!isNaN(idx)) onSentenceClickRef.current(idx);
     };
     container.addEventListener('click', handleClick);
     return () => container.removeEventListener('click', handleClick);
@@ -41,7 +42,7 @@ export default function Reader({ chapterHtml, book, currentChapter, isLoading, o
   }, [chapterHtml, book, currentChapter]);
 
   return (
-    <main className="reader" ref={readerRef}>
+    <main className={`reader${onSentenceClick ? ' reader-tts-clickable' : ''}`} ref={readerRef}>
       {isLoading ? (
         <div className="reader-loading">加载中…</div>
       ) : chapterHtml ? (

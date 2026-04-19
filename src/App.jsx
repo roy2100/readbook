@@ -11,6 +11,7 @@ import { useVoices } from './hooks/useVoices.js';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [readingMode, setReadingMode] = useState(false);
   const [rate, setRateState] = useState(() => {
     const saved = parseFloat(localStorage.getItem('tts-rate'));
     return isNaN(saved) ? 1 : saved;
@@ -133,7 +134,7 @@ export default function App() {
           currentChapter={currentChapter}
           isLoading={isLoading}
           onSentencesReady={handleSentencesReady}
-          onSentenceClick={handleSentenceClick}
+          onSentenceClick={readingMode ? null : handleSentenceClick}
         />
       </div>
 
@@ -145,6 +146,7 @@ export default function App() {
         rate={rate}
         voiceURI={voiceURI}
         voices={voices}
+        readingMode={readingMode}
         onPlay={play}
         onPause={pause}
         onStop={stop}
@@ -153,6 +155,7 @@ export default function App() {
         onRateChange={handleRateChange}
         onVoiceChange={handleVoiceChange}
         onFileOpen={handleFileOpen}
+        onReadingModeToggle={() => setReadingMode(m => !m)}
       />
 
       {toast && <Toast message={toast.message} isError={toast.isError} />}

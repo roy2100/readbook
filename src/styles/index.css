@@ -145,8 +145,11 @@
 .reader-content a { color: var(--app-accent); text-decoration: none; }
 .reader-content img { max-width: 100%; height: auto; display: block; margin: 1.5em auto; border-radius: 8px; }
 
-.tts-sentence { border-radius: 3px; transition: background-color 0.15s; cursor: pointer; }
+.tts-sentence { border-radius: 3px; transition: background-color 0.15s; }
 .tts-sentence.active { background-color: var(--highlight-active); }
+.reader-tts-clickable .tts-sentence { cursor: pointer; }
+
+.reader-content { user-select: text; }
 
 .reader-welcome {
   display: flex;
@@ -224,6 +227,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Reading mode: show only nav row + toggle row */
+.controls-reading-mode .controls-row-3 {
+  justify-content: flex-end;
 }
 
 /* ── Desktop (768px+) ── */

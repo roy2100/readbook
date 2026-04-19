@@ -15,9 +15,9 @@ function FileLabel({ onFileOpen, className, children }) {
 
 export default function Controls({
   book, currentIndex, currentChapter, ttsState,
-  rate, voiceURI, voices,
+  rate, voiceURI, voices, readingMode,
   onPlay, onPause, onStop, onPrev, onNext,
-  onRateChange, onVoiceChange, onFileOpen,
+  onRateChange, onVoiceChange, onFileOpen, onReadingModeToggle,
 }) {
   const isPlaying = ttsState === 'playing';
   const isStopped = ttsState === 'stopped' || ttsState === 'ended';
@@ -26,7 +26,7 @@ export default function Controls({
   const isNextDisabled = noBook || currentIndex >= (book?.chapters.length ?? 1) - 1;
 
   return (
-    <footer className="controls">
+    <footer className={`controls${readingMode ? ' controls-reading-mode' : ''}`}>
 
       {/* Row 1: chapter nav + open EPUB */}
       <div className="controls-row controls-row-1">
@@ -45,62 +45,83 @@ export default function Controls({
             </svg>
           </Button>
         </div>
-        <FileLabel onFileOpen={onFileOpen} className="btn btn-primary btn-sm upload-btn-mobile d-flex align-items-center gap-1">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          打开 EPUB
-        </FileLabel>
+        {!readingMode && (
+          <FileLabel onFileOpen={onFileOpen} className="btn btn-primary btn-sm upload-btn-mobile d-flex align-items-center gap-1">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            打开 EPUB
+          </FileLabel>
+        )}
       </div>
 
       {/* Row 2: play / stop */}
-      <div className="controls-row controls-row-2">
-        <Button
-          variant="primary"
-          className="ctrl-btn-play"
-          onClick={isPlaying ? onPause : onPlay}
-          disabled={noBook}
-          title={isPlaying ? '暂停' : '播放'}
-        >
-          {isPlaying ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="4" width="4" height="16"/>
-              <rect x="14" y="4" width="4" height="16"/>
+      {!readingMode && (
+        <div className="controls-row controls-row-2">
+          <Button
+            variant="primary"
+            className="ctrl-btn-play"
+            onClick={isPlaying ? onPause : onPlay}
+            disabled={noBook}
+            title={isPlaying ? '暂停' : '播放'}
+          >
+            {isPlaying ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16"/>
+                <rect x="14" y="4" width="4" height="16"/>
+              </svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            )}
+          </Button>
+          <Button variant="outline-secondary" onClick={onStop} disabled={noBook || isStopped} title="停止">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
             </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-          )}
-        </Button>
-        <Button variant="outline-secondary" onClick={onStop} disabled={noBook || isStopped} title="停止">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-          </svg>
-        </Button>
-      </div>
+          </Button>
+        </div>
+      )}
 
-      {/* Row 3: speed + voice */}
+      {/* Row 3: speed + voice + reading mode toggle */}
       <div className="controls-row controls-row-3">
-        <label className="ctrl-label">
-          <span>速度</span>
-          <Form.Select size="sm" value={rate} onChange={e => onRateChange(parseFloat(e.target.value))} style={{ width: 'auto' }}>
-            {[0.5, 0.75, 0.8, 0.9, 1, 1.25, 1.5, 2].map(r => (
-              <option key={r} value={r}>{r === 1 ? '1.0×' : `${r}×`}</option>
-            ))}
-          </Form.Select>
-        </label>
-        <label className="ctrl-label">
-          <span>音色</span>
-          <Form.Select size="sm" value={voiceURI} onChange={e => onVoiceChange(e.target.value)} style={{ width: 'auto', maxWidth: 160 }}>
-            <option value="">默认</option>
-            {voices.map(v => (
-              <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
-            ))}
-          </Form.Select>
-        </label>
+        {!readingMode && (
+          <>
+            <label className="ctrl-label">
+              <span>速度</span>
+              <Form.Select size="sm" value={rate} onChange={e => onRateChange(parseFloat(e.target.value))} style={{ width: 'auto' }}>
+                {[0.5, 0.75, 0.8, 0.9, 1, 1.25, 1.5, 2].map(r => (
+                  <option key={r} value={r}>{r === 1 ? '1.0×' : `${r}×`}</option>
+                ))}
+              </Form.Select>
+            </label>
+            <label className="ctrl-label">
+              <span>音色</span>
+              <Form.Select size="sm" value={voiceURI} onChange={e => onVoiceChange(e.target.value)} style={{ width: 'auto', maxWidth: 160 }}>
+                <option value="">默认</option>
+                {voices.map(v => (
+                  <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                ))}
+              </Form.Select>
+            </label>
+          </>
+        )}
+        <Button
+          variant={readingMode ? 'primary' : 'outline-secondary'}
+          size="sm"
+          onClick={onReadingModeToggle}
+          title={readingMode ? '退出阅读模式' : '阅读模式'}
+          className="reading-mode-btn"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          {readingMode ? '退出阅读' : '阅读模式'}
+        </Button>
       </div>
 
     </footer>

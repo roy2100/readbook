@@ -27,17 +27,19 @@ export function useBook() {
     setIsLoading(true);
     setCurrentIndex(index);
 
-    const ch = currentBook.chapters[index];
-    let html;
-    if (htmlCache.current.has(index)) {
-      html = htmlCache.current.get(index);
-    } else {
-      html = await loadChapter(currentBook.zip, ch);
-      htmlCache.current.set(index, html);
+    try {
+      const ch = currentBook.chapters[index];
+      let html;
+      if (htmlCache.current.has(index)) {
+        html = htmlCache.current.get(index);
+      } else {
+        html = await loadChapter(currentBook.zip, ch);
+        htmlCache.current.set(index, html);
+      }
+      setChapterHtml(html);
+    } finally {
+      setIsLoading(false);
     }
-
-    setChapterHtml(html);
-    setIsLoading(false);
   }, []);
 
   return { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter };

@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { normalizePath } from './utils.js';
 
 export async function parseEpub(file) {
   const zip = await JSZip.loadAsync(file);
@@ -53,7 +54,7 @@ export function parseOpf(xml, opfDir) {
     const href = decodeURIComponent(item.getAttribute('href') || '');
     const mediaType = item.getAttribute('media-type') || '';
     const properties = item.getAttribute('properties') || '';
-    manifest[id] = { href, mediaType, properties, fullPath: opfDir + href };
+    manifest[id] = { href, mediaType, properties, fullPath: normalizePath(opfDir + href) };
   });
 
   const spine = [];
@@ -138,8 +139,26 @@ export async function loadChapter(zip, chapter) {
   const raw = await readZipEntry(zip, chapter.fullPath);
   const doc = parseHtml(raw);
   doc.querySelectorAll('script, style').forEach(el => el.remove());
-  const body = doc.body || doc.documentElement;
-  return body ? body.innerHTML : raw;
+  const body = doc.body;
+  if (body && body.innerHTML.trim()) return body.innerHTML;
+
+  // Fallback: try XHTML parser (handles namespace-heavy EPUB 3 files better)
+  try {
+    const xhtmlDoc = new DOMParser().parseFromString(raw, 'application/xhtml+xml');
+    if (!xhtmlDoc.querySelector('parsererror')) {
+      xhtmlDoc.querySelectorAll('script, style').forEach(el => el.remove());
+      const xhtmlBody = xhtmlDoc.body;
+      if (xhtmlBody && xhtmlBody.innerHTML.trim()) return xhtmlBody.innerHTML;
+    }
+  } catch (_) {}
+
+  // Last resort: strip outer HTML structure and return body content
+  const stripped = raw
+    .replace(/<head[\s\S]*?<\/head>/i, '')
+    .replace(/<\/?html[^>]*>/gi, '')
+    .replace(/<\/?body[^>]*>/gi, '')
+    .trim();
+  return stripped;
 }
 
 function parseXml(xml) {

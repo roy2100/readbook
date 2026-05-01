@@ -45,7 +45,7 @@ export default function Reader({ chapterHtml, book, currentChapter, isLoading, o
     <main className={`reader${onSentenceClick ? ' reader-tts-clickable' : ''}`} ref={readerRef}>
       {isLoading ? (
         <div className="reader-loading">加载中…</div>
-      ) : chapterHtml ? (
+      ) : chapterHtml !== null ? (
         <div
           ref={contentRef}
           className="reader-content"

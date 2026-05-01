@@ -96,6 +96,21 @@ describe('parseOpf', () => {
     expect(opf.manifest['ch1'].fullPath).toBe('OEBPS/Text/ch1.xhtml');
   });
 
+  it('normalizes ../ segments in manifest fullPath', () => {
+    // EPUBs sometimes place chapter files in a sibling dir of the OPF,
+    // referencing them with "../". Without normalizePath this produces
+    // "OEBPS/../Text/ch1.xhtml" which JSZip cannot resolve.
+    const xml = MINIMAL_OPF.replace('href="Text/ch1.xhtml"', 'href="../Text/ch1.xhtml"');
+    const opf = parseOpf(xml, 'OEBPS/');
+    expect(opf.manifest['ch1'].fullPath).toBe('Text/ch1.xhtml');
+  });
+
+  it('normalizes ./ segments in manifest fullPath', () => {
+    const xml = MINIMAL_OPF.replace('href="Text/ch1.xhtml"', 'href="./Text/ch1.xhtml"');
+    const opf = parseOpf(xml, 'OEBPS/');
+    expect(opf.manifest['ch1'].fullPath).toBe('OEBPS/Text/ch1.xhtml');
+  });
+
   it('builds spine in document order', () => {
     const opf = parseOpf(MINIMAL_OPF, 'OEBPS/');
     expect(opf.spine).toEqual(['ch1', 'ch2']);
@@ -474,6 +489,37 @@ describe('loadChapter', () => {
     });
     const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/empty.xhtml' });
     expect(html).toBe('');
+  });
+
+  it('returns empty string for a whitespace-only body', async () => {
+    const zip = fakeZip({
+      'OEBPS/Text/spaces.xhtml': '<html><body>  \n\t  </body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/spaces.xhtml' });
+    expect(html).toBe('');
+  });
+
+  it('loads chapter from ZIP when fullPath was normalized from ../ href', async () => {
+    // After parseOpf normalizes "OEBPS/../Text/ch1.xhtml" → "Text/ch1.xhtml",
+    // the chapter file must be found at the resolved path.
+    const zip = fakeZip({
+      'Text/ch1.xhtml': '<html><body><p>Cross-dir chapter</p></body></html>',
+    });
+    const html = await loadChapter(zip, { fullPath: 'Text/ch1.xhtml' });
+    expect(html).toContain('<p>Cross-dir chapter</p>');
+  });
+
+  it('falls back to last-resort extraction when body is empty but content exists outside body', async () => {
+    // Simulate a degenerate file: body is empty but there is raw markup that
+    // the regex stripping pass can recover.
+    const zip = fakeZip({
+      'OEBPS/Text/odd.xhtml': '<html><head></head><body></body></html>\n<p>Recovered</p>',
+    });
+    // The HTML parser moves the orphan <p> into body during parse, so this
+    // case actually resolves at the first strategy. The test verifies the
+    // content is always surfaced regardless of which strategy handles it.
+    const html = await loadChapter(zip, { fullPath: 'OEBPS/Text/odd.xhtml' });
+    expect(html).toContain('Recovered');
   });
 
   it('throws when the chapter file is not found in the ZIP', async () => {

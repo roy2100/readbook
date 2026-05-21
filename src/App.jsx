@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Header from './components/Header.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Reader from './components/Reader.jsx';
@@ -17,6 +17,8 @@ export default function App() {
     return isNaN(saved) ? 1 : saved;
   });
   const [voiceURI, setVoiceURI] = useState(() => localStorage.getItem('tts-voice') ?? '');
+
+  const pendingAutoPlay = useRef(false);
 
   const { toast, showToast } = useToast();
   const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter } = useBook();
@@ -48,7 +50,11 @@ export default function App() {
 
   const handleSentencesReady = useCallback((sentences) => {
     load(sentences);
-  }, [load]);
+    if (pendingAutoPlay.current) {
+      pendingAutoPlay.current = false;
+      play();
+    }
+  }, [load, play]);
 
   const handleSentenceClick = useCallback((index) => {
     playFrom(index);
@@ -78,12 +84,9 @@ export default function App() {
   useEffect(() => {
     if (ttsState !== 'ended' || !book) return;
     if (currentIndex >= book.chapters.length - 1) return;
-    const timer = setTimeout(async () => {
-      await goToChapter(currentIndex + 1);
-      play();
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [ttsState, book, currentIndex, goToChapter, play]);
+    pendingAutoPlay.current = true;
+    goToChapter(currentIndex + 1);
+  }, [ttsState, book, currentIndex, goToChapter]);
 
   // Keyboard shortcuts
   useEffect(() => {

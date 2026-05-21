@@ -400,6 +400,84 @@ describe('TTSController.setRate', () => {
   });
 });
 
+// ── auto-advance chapter (App.jsx pendingAutoPlay pattern) ───────────────────
+
+describe('TTSController — chapter auto-advance sequence', () => {
+  it('emits "ended" after the last sentence utterance fires onend', () => {
+    const tts = new TTSController();
+    const states = [];
+    tts.onStateChange = s => states.push(s);
+    tts.load(makeSentences(1));
+    tts.play();
+
+    const utt = getLastUtterance();
+    tts.isPlaying = true;
+    utt.onend();  // last sentence ends → _speakFrom(1) → queue exhausted
+
+    expect(states).toContain('ended');
+    expect(tts.isPlaying).toBe(false);
+  });
+
+  it('load() + play() on new chapter after "ended" starts from index 0', () => {
+    const tts = new TTSController();
+    const states = [];
+    tts.onStateChange = s => states.push(s);
+
+    // Finish first chapter
+    tts.load(makeSentences(1));
+    tts.play();
+    const utt = getLastUtterance();
+    tts.isPlaying = true;
+    utt.onend();
+    expect(states).toContain('ended');
+
+    // Simulate App.jsx: handleSentencesReady loads next chapter then plays
+    mockSynth.speak.mockClear();
+    const nextChapter = makeSentences(3);
+    tts.load(nextChapter);
+    tts.play();
+
+    expect(tts.isPlaying).toBe(true);
+    expect(tts.currentIndex).toBe(0);
+    const nextUtt = getLastUtterance();
+    expect(nextUtt.text).toBe(nextChapter[0].text);
+  });
+
+  it('load() resets state so play() starts fresh, not from stale index', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences(5));
+    tts.currentIndex = 4;  // pretend we were mid-chapter
+    tts.isPlaying = true;
+
+    // load() is called by handleSentencesReady for the new chapter
+    tts.load(makeSentences(3));
+
+    expect(tts.currentIndex).toBe(0);
+    expect(tts.isPlaying).toBe(false);
+  });
+
+  it('play() after load() of empty chapter does nothing', () => {
+    const tts = new TTSController();
+    tts.load([]);
+    tts.play();
+    expect(tts.isPlaying).toBe(false);
+    expect(mockSynth.speak).not.toHaveBeenCalled();
+  });
+
+  it('"ended" sets isPlaying to false so play() is not a no-op', () => {
+    // Guards the bug: if isPlaying stayed true after "ended", play() would
+    // short-circuit and auto-advance would silently fail.
+    const tts = new TTSController();
+    tts.load(makeSentences(1));
+    tts.play();
+    const utt = getLastUtterance();
+    tts.isPlaying = true;
+    utt.onend();  // triggers "ended"
+
+    expect(tts.isPlaying).toBe(false);  // play() guard won't block next chapter
+  });
+});
+
 // ── getVoices ─────────────────────────────────────────────────────────────────
 
 describe('TTSController.getVoices', () => {

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { parseEpub, loadChapter } from '../lib/epub-parser.js';
 import { normalizePath } from '../lib/utils.js';
+import { saveBook, loadBook } from '../lib/bookStorage.js';
 
 export function useBook() {
   const [book, setBook] = useState(null);
@@ -11,12 +12,14 @@ export function useBook() {
   const htmlCache = useRef(new Map());
 
   const openFile = useCallback(async (file) => {
-    const parsed = await parseEpub(file);
+    const arrayBuffer = await file.arrayBuffer();
+    const parsed = await parseEpub(new File([arrayBuffer], file.name, { type: file.type }));
     htmlCache.current.clear();
     bookRef.current = parsed;
     setBook(parsed);
     setCurrentIndex(0);
     setChapterHtml(null);
+    saveBook(arrayBuffer).catch(() => {});
     return parsed;
   }, []);
 
@@ -42,7 +45,19 @@ export function useBook() {
     }
   }, []);
 
-  return { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter };
+  const restoreBook = useCallback(async () => {
+    const arrayBuffer = await loadBook();
+    if (!arrayBuffer) return null;
+    const file = new File([arrayBuffer], 'book.epub', { type: 'application/epub+zip' });
+    const parsed = await parseEpub(file);
+    htmlCache.current.clear();
+    bookRef.current = parsed;
+    setBook(parsed);
+    setChapterHtml(null);
+    return parsed;
+  }, []);
+
+  return { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter, restoreBook };
 }
 
 export async function resolveImages(container, zip, opfDir, chapterHref) {

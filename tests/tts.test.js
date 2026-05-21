@@ -540,9 +540,9 @@ describe('TTSController.getVoices', () => {
   });
 });
 
-// ── keepalive (Chrome background-tab freeze fix) ───────────────────────────────
+// ── no background keepalive ───────────────────────────────────────────────────
 
-describe('TTSController — keepalive timer', () => {
+describe('TTSController — no background keepalive', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -551,92 +551,10 @@ describe('TTSController — keepalive timer', () => {
     vi.useRealTimers();
   });
 
-  it('_keepAliveTimer is null before play()', () => {
-    const tts = new TTSController();
-    expect(tts._keepAliveTimer).toBeNull();
-  });
-
-  it('sets a timer after play() starts speaking', () => {
+  it('does not start a timer after play()', () => {
     const tts = new TTSController();
     tts.load(makeSentences());
     tts.play();
-    expect(tts._keepAliveTimer).not.toBeNull();
-  });
-
-  it('clears the timer on pause()', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences());
-    tts.play();
-    tts.pause();
-    expect(tts._keepAliveTimer).toBeNull();
-  });
-
-  it('clears the timer on stop()', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences());
-    tts.play();
-    tts.stop();
-    expect(tts._keepAliveTimer).toBeNull();
-  });
-
-  it('clears the timer when queue is exhausted (ended)', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences(1));
-    tts.play();
-    const utt = getLastUtterance();
-    tts.isPlaying = true;
-    utt.onend();  // triggers _speakFrom(1) → ended
-    expect(tts._keepAliveTimer).toBeNull();
-  });
-
-  it('restarts speech when interval fires and synth has stalled', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences(3));
-    tts.play();
-    tts.currentIndex = 1;
-
-    // Simulate Chrome freeze: isPlaying=true but synth went silent
-    mockSynth.speaking = false;
-    mockSynth.pending = false;
-    mockSynth.speak.mockClear();
-
-    vi.advanceTimersByTime(5000);
-
-    expect(mockSynth.speak).toHaveBeenCalledOnce();
-    const utt = getLastUtterance();
-    expect(utt.text).toContain('Sentence 2');
-  });
-
-  it('does not restart when synth is still speaking normally', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences(3));
-    tts.play();
-    mockSynth.speak.mockClear();
-
-    mockSynth.speaking = true;  // still active — no stall
-    vi.advanceTimersByTime(5000);
-
-    expect(mockSynth.speak).not.toHaveBeenCalled();
-  });
-
-  it('does not restart when synth has pending utterances', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences(3));
-    tts.play();
-    mockSynth.speak.mockClear();
-
-    mockSynth.speaking = false;
-    mockSynth.pending = true;  // still queued
-    vi.advanceTimersByTime(5000);
-
-    expect(mockSynth.speak).not.toHaveBeenCalled();
-  });
-
-  it('does not restart when isPlaying is false', () => {
-    const tts = new TTSController();
-    tts.load(makeSentences(3));
-    tts.play();
-    tts.isPlaying = false;  // manually mark stopped
     mockSynth.speak.mockClear();
 
     mockSynth.speaking = false;
@@ -644,22 +562,5 @@ describe('TTSController — keepalive timer', () => {
     vi.advanceTimersByTime(5000);
 
     expect(mockSynth.speak).not.toHaveBeenCalled();
-  });
-
-  it('does not accumulate multiple timers across _speakFrom calls', () => {
-    const tts = new TTSController();
-    const startSpy = vi.spyOn(tts, '_startKeepAlive');
-    tts.load(makeSentences(3));
-    tts.play();  // _speakFrom(0) — timer starts
-
-    // Simulate utterance end advancing to next sentence
-    const utt = getLastUtterance();
-    tts.isPlaying = true;
-    utt.onend();  // _speakFrom(1) — timer already running, should not add another
-
-    // Only one active timer handle at a time
-    expect(tts._keepAliveTimer).not.toBeNull();
-    // _startKeepAlive called only once (the second call is skipped by the null guard)
-    expect(startSpy).toHaveBeenCalledOnce();
   });
 });

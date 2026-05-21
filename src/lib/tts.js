@@ -13,7 +13,6 @@ export class TTSController {
     this.chapterIndex = null;
     this.sessionId = 0;
     this.onStateChange = null;
-    this._keepAliveTimer = null;
   }
 
   load(sentences, context = {}) {
@@ -54,7 +53,6 @@ export class TTSController {
 
   pause() {
     if (!this.isPlaying) return;
-    this._stopKeepAlive();
     this.pausedIndex = this.currentIndex;
     this.isPlaying = false;
     this.isPaused = true;
@@ -64,7 +62,6 @@ export class TTSController {
   }
 
   stop() {
-    this._stopKeepAlive();
     this.synth.cancel();
     this.isPlaying = false;
     this.isPaused = false;
@@ -103,26 +100,8 @@ export class TTSController {
     });
   }
 
-  _startKeepAlive() {
-    this._stopKeepAlive();
-    // Chrome freezes speechSynthesis in background tabs; restart if it stalls.
-    this._keepAliveTimer = setInterval(() => {
-      if (this.isPlaying && !this.synth.speaking && !this.synth.pending) {
-        this._speakFrom(this.currentIndex);
-      }
-    }, 5000);
-  }
-
-  _stopKeepAlive() {
-    if (this._keepAliveTimer !== null) {
-      clearInterval(this._keepAliveTimer);
-      this._keepAliveTimer = null;
-    }
-  }
-
   _speakFrom(startIndex) {
     if (startIndex >= this.queue.length) {
-      this._stopKeepAlive();
       this.isPlaying = false;
       clearHighlight();
       this._notify('ended');
@@ -150,7 +129,6 @@ export class TTSController {
     };
 
     this.synth.speak(utt);
-    if (this._keepAliveTimer === null) this._startKeepAlive();
   }
 
   _notify(state) {

@@ -217,6 +217,14 @@
   font-size: 13px;
   color: var(--app-text-muted);
 }
+.reading-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.reading-mode-btn svg { flex: 0 0 auto; }
 
 /* Play button: 62px circle on mobile */
 .controls-row-2 .ctrl-btn-play {
@@ -232,6 +240,51 @@
 /* Reading mode: show only nav row + toggle row */
 .controls-reading-mode .controls-row-3 {
   justify-content: flex-end;
+}
+
+@media (max-width: 767.98px) {
+  .controls-row-3 {
+    justify-content: stretch;
+    gap: 8px;
+    padding: 8px 10px 10px;
+  }
+
+  .controls-row-3 .ctrl-label {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .controls-row-3 .ctrl-label:first-of-type {
+    flex: 0 0 auto;
+  }
+
+  .controls-row-3 .ctrl-label:first-of-type .form-select {
+    width: 78px !important;
+  }
+
+  .controls-row-3 .ctrl-label:nth-of-type(2) {
+    flex: 1 1 0;
+  }
+
+  .controls-row-3 .ctrl-label:nth-of-type(2) .form-select {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .reading-mode-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 /* ── Desktop (768px+) ── */

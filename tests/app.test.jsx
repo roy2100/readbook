@@ -7,6 +7,8 @@ import App from '../src/App.jsx';
 
 const state = vi.hoisted(() => ({
   ttsState: 'stopped',
+  ttsChapterIndex: 0,
+  ttsSessionId: 0,
   currentIndex: 0,
   book: null,
 }));
@@ -15,10 +17,25 @@ const state = vi.hoisted(() => ({
 const captured = vi.hoisted(() => ({ onSentencesReady: null }));
 
 const mocks = vi.hoisted(() => ({
-  goToChapter: vi.fn(),
+  goToChapter: vi.fn(() => Promise.resolve()),
   play: vi.fn(),
   load: vi.fn(),
   stop: vi.fn(),
+  navigate: vi.fn(),
+}));
+
+// Tracks current chapterIndex as if the router were updating it on navigate
+const routeState = vi.hoisted(() => ({ chapterIndex: undefined }));
+
+// ── Mock react-router-dom ─────────────────────────────────────────────────────
+
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ chapterIndex: routeState.chapterIndex }),
+  useNavigate: () => (path, opts) => {
+    mocks.navigate(path, opts);
+    const match = String(path).match(/^\/(\d+)$/);
+    if (match) routeState.chapterIndex = match[1];
+  },
 }));
 
 // ── Mock child components (render nothing, remove external dependencies) ──────
@@ -45,6 +62,7 @@ vi.mock('../src/hooks/useBook.js', () => ({
     isLoading: false,
     openFile: vi.fn(),
     goToChapter: mocks.goToChapter,
+    restoreBook: vi.fn(() => Promise.resolve(null)),
   }),
   resolveImages: vi.fn(() => Promise.resolve()),
 }));
@@ -52,6 +70,11 @@ vi.mock('../src/hooks/useBook.js', () => ({
 vi.mock('../src/hooks/useTTS.js', () => ({
   useTTS: () => ({
     ttsState: state.ttsState,
+    ttsInfo: {
+      state: state.ttsState,
+      chapterIndex: state.ttsChapterIndex,
+      sessionId: state.ttsSessionId,
+    },
     load: mocks.load,
     play: mocks.play,
     pause: vi.fn(),
@@ -92,91 +115,136 @@ function makeSentences(n = 2) {
 
 beforeEach(() => {
   state.ttsState = 'stopped';
+  state.ttsChapterIndex = 0;
+  state.ttsSessionId = 0;
   state.currentIndex = 0;
   state.book = makeBook(3);
+  routeState.chapterIndex = undefined;
   captured.onSentencesReady = null;
   mocks.goToChapter.mockReset();
+  mocks.goToChapter.mockImplementation(() => Promise.resolve());
   mocks.play.mockReset();
   mocks.load.mockReset();
   mocks.stop.mockReset();
+  mocks.navigate.mockReset();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('App — auto-advance to next chapter', () => {
   describe('chapter navigation on TTS end', () => {
-    it('calls goToChapter(currentIndex + 1) when ttsState becomes "ended"', () => {
+    it('navigates to next chapter URL when ttsState becomes "ended"', () => {
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'ended';
       rerender(<App />);
 
-      expect(mocks.goToChapter).toHaveBeenCalledWith(1);
+      expect(mocks.navigate).toHaveBeenCalledWith('/1', expect.any(Object));
     });
 
-    it('advances from any non-last chapter (currentIndex = 1 → goToChapter(2))', () => {
+    it('navigates from any non-last chapter (currentIndex = 1 → /2)', () => {
       state.currentIndex = 1;
+      state.ttsChapterIndex = 1;
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'ended';
       rerender(<App />);
 
-      expect(mocks.goToChapter).toHaveBeenCalledWith(2);
+      expect(mocks.navigate).toHaveBeenCalledWith('/2', expect.any(Object));
     });
 
-    it('does NOT call goToChapter when on the last chapter', () => {
+    it('does NOT navigate when on the last chapter', () => {
       state.currentIndex = 2; // last of 3
+      state.ttsChapterIndex = 2;
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'ended';
       rerender(<App />);
 
-      expect(mocks.goToChapter).not.toHaveBeenCalled();
+      expect(mocks.navigate).not.toHaveBeenCalled();
     });
 
-    it('does NOT call goToChapter when book is null', () => {
+    it('does NOT navigate when book is null', () => {
       state.book = null;
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'ended';
       rerender(<App />);
 
-      expect(mocks.goToChapter).not.toHaveBeenCalled();
+      expect(mocks.navigate).not.toHaveBeenCalled();
     });
 
-    it('does NOT call goToChapter when ttsState is "playing" or "paused"', () => {
+    it('does NOT navigate when ttsState is "playing" or "paused"', () => {
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'playing';
       rerender(<App />);
       state.ttsState = 'paused';
       rerender(<App />);
 
-      expect(mocks.goToChapter).not.toHaveBeenCalled();
+      expect(mocks.navigate).not.toHaveBeenCalled();
     });
 
-    it('handles single-chapter book: no advance when the only chapter ends', () => {
+    it('handles single-chapter book: no navigation when the only chapter ends', () => {
       state.book = makeBook(1);
       state.currentIndex = 0;
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       state.ttsState = 'ended';
       rerender(<App />);
 
-      expect(mocks.goToChapter).not.toHaveBeenCalled();
+      expect(mocks.navigate).not.toHaveBeenCalled();
+    });
+
+    it('does NOT repeatedly advance while the same ended state is still current', () => {
+      const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
+
+      state.ttsState = 'ended';
+      state.ttsSessionId = 1;
+      rerender(<App />);
+      expect(mocks.navigate).toHaveBeenCalledWith('/1', expect.any(Object));
+
+      mocks.navigate.mockClear();
+      state.currentIndex = 1;
+      rerender(<App />);
+
+      expect(mocks.navigate).not.toHaveBeenCalled();
+    });
+
+    it('ignores an ended event from a chapter that is no longer current', () => {
+      state.currentIndex = 1;
+      state.ttsChapterIndex = 0;
+      state.ttsSessionId = 7;
+      const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
+
+      state.ttsState = 'ended';
+      rerender(<App />);
+
+      expect(mocks.navigate).not.toHaveBeenCalled();
     });
   });
 
   describe('auto-play after chapter navigation (pendingAutoPlay)', () => {
     it('calls play() after onSentencesReady fires following a chapter end', () => {
       const { rerender } = render(<App />);
+      mocks.navigate.mockClear();
 
       // Step 1: chapter ends → pendingAutoPlay = true, navigate to next chapter
       state.ttsState = 'ended';
       rerender(<App />);
-      expect(mocks.goToChapter).toHaveBeenCalledWith(1);
+      expect(mocks.navigate).toHaveBeenCalledWith('/1', expect.any(Object));
 
       // Step 2: Reader annotates new chapter, calls onSentencesReady
+      state.currentIndex = 1;
+      rerender(<App />);
       act(() => captured.onSentencesReady(makeSentences()));
 
       expect(mocks.load).toHaveBeenCalled();
@@ -189,10 +257,12 @@ describe('App — auto-advance to next chapter', () => {
       state.ttsState = 'ended';
       rerender(<App />);
 
+      state.currentIndex = 1;
+      rerender(<App />);
       const sentences = makeSentences(4);
       act(() => captured.onSentencesReady(sentences));
 
-      expect(mocks.load).toHaveBeenCalledWith(sentences);
+      expect(mocks.load).toHaveBeenCalledWith(sentences, { chapterIndex: 1 });
     });
 
     it('does NOT call play() when sentences arrive without a prior chapter end', () => {
@@ -212,6 +282,8 @@ describe('App — auto-advance to next chapter', () => {
       rerender(<App />);
 
       const sentences = makeSentences();
+      state.currentIndex = 1;
+      rerender(<App />);
       act(() => captured.onSentencesReady(sentences)); // pendingAutoPlay cleared here
       act(() => captured.onSentencesReady(sentences)); // second call — flag already false
 
@@ -220,6 +292,7 @@ describe('App — auto-advance to next chapter', () => {
 
     it('does NOT call play() when last chapter ends (no navigation, no autoplay)', () => {
       state.currentIndex = 2; // last chapter
+      state.ttsChapterIndex = 2;
       const { rerender } = render(<App />);
 
       state.ttsState = 'ended';

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import Header from './components/Header.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Reader from './components/Reader.jsx';
@@ -19,46 +20,68 @@ export default function App() {
   const [voiceURI, setVoiceURI] = useState(() => localStorage.getItem('tts-voice') ?? '');
 
   const pendingAutoPlay = useRef(false);
+  const handledEndedSession = useRef(null);
+
+  const { chapterIndex } = useParams();
+  const navigate = useNavigate();
 
   const { toast, showToast } = useToast();
-  const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter } = useBook();
-  const { ttsState, load, play, pause, stop, setRate, setVoice, getVoices, playFrom } = useTTS();
+  const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter, restoreBook } = useBook();
+  const { ttsState, ttsInfo, load, play, pause, stop, setRate, setVoice, getVoices, playFrom } = useTTS();
   const allVoices = useVoices();
 
   const currentChapter = book?.chapters[currentIndex] ?? null;
-
-  // Sort voices by book language preference
   const voices = book ? getVoices(book.language) : allVoices;
 
+  // URL param drives chapter loading — fires on route change or book change
+  useEffect(() => {
+    if (!book) return;
+    const idx = parseInt(chapterIndex ?? '0', 10);
+    if (!isNaN(idx)) goToChapter(idx);
+  }, [chapterIndex, book]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFileOpen = useCallback(async (file) => {
+    navigate('/0', { replace: true }); // reset URL before parsing
     showToast('正在解析 EPUB…');
     try {
       const parsed = await openFile(file);
-      await goToChapter(0);
       document.title = `${parsed.title} — ReadBook`;
       showToast(`《${parsed.title}》已加载`);
     } catch (err) {
       showToast('解析失败：' + err.message, true);
     }
-  }, [openFile, goToChapter, showToast]);
+  }, [openFile, navigate, showToast]);
 
-  const handleChapterSelect = useCallback(async (index) => {
+  const handleChapterSelect = useCallback((index) => {
     stop();
     setSidebarOpen(false);
-    await goToChapter(index);
-  }, [goToChapter, stop]);
+    navigate('/' + index, { replace: true });
+  }, [navigate, stop]);
 
   const handleSentencesReady = useCallback((sentences) => {
-    load(sentences);
-    if (pendingAutoPlay.current) {
+    load(sentences, { chapterIndex: currentIndex });
+    if (pendingAutoPlay.current === currentIndex) {
       pendingAutoPlay.current = false;
       play();
     }
-  }, [load, play]);
+  }, [currentIndex, load, play]);
 
   const handleSentenceClick = useCallback((index) => {
     playFrom(index);
   }, [playFrom]);
+
+  // Restore book from IndexedDB on mount
+  useEffect(() => {
+    const savedIdx = parseInt(chapterIndex ?? '0', 10);
+    restoreBook()
+      .then((parsed) => {
+        if (!parsed) return;
+        navigate('/' + (isNaN(savedIdx) ? 0 : savedIdx), { replace: true });
+        document.title = `${parsed.title} — ReadBook`;
+        showToast(`已恢复《${parsed.title}》`);
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply saved rate to TTS controller on mount
   useEffect(() => { setRate(rate); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -83,10 +106,13 @@ export default function App() {
   // Auto-advance to next chapter when TTS finishes
   useEffect(() => {
     if (ttsState !== 'ended' || !book) return;
+    if (ttsInfo?.chapterIndex !== currentIndex) return;
+    if (handledEndedSession.current === ttsInfo.sessionId) return;
     if (currentIndex >= book.chapters.length - 1) return;
-    pendingAutoPlay.current = true;
-    goToChapter(currentIndex + 1);
-  }, [ttsState, book, currentIndex, goToChapter]);
+    handledEndedSession.current = ttsInfo.sessionId;
+    pendingAutoPlay.current = currentIndex + 1;
+    navigate('/' + (currentIndex + 1), { replace: true });
+  }, [ttsState, ttsInfo, book, currentIndex, navigate]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -100,11 +126,11 @@ export default function App() {
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          stop(); goToChapter(currentIndex - 1);
+          if (currentIndex > 0) { stop(); navigate('/' + (currentIndex - 1), { replace: true }); }
           break;
         case 'ArrowRight':
           e.preventDefault();
-          stop(); goToChapter(currentIndex + 1);
+          if (currentIndex < book.chapters.length - 1) { stop(); navigate('/' + (currentIndex + 1), { replace: true }); }
           break;
         case 'Escape':
           stop();
@@ -113,7 +139,7 @@ export default function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [book, ttsState, currentIndex, play, pause, stop, goToChapter]);
+  }, [book, ttsState, currentIndex, play, pause, stop, navigate]);
 
   return (
     <div className="app">
@@ -153,8 +179,8 @@ export default function App() {
         onPlay={play}
         onPause={pause}
         onStop={stop}
-        onPrev={() => { stop(); goToChapter(currentIndex - 1); }}
-        onNext={() => { stop(); goToChapter(currentIndex + 1); }}
+        onPrev={() => { stop(); navigate('/' + (currentIndex - 1), { replace: true }); }}
+        onNext={() => { stop(); navigate('/' + (currentIndex + 1), { replace: true }); }}
         onRateChange={handleRateChange}
         onVoiceChange={handleVoiceChange}
         onFileOpen={handleFileOpen}

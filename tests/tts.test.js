@@ -100,6 +100,16 @@ describe('TTSController.load', () => {
     tts.load(makeSentences(2));
     expect(tts.currentIndex).toBe(0);
   });
+
+  it('records chapter metadata and advances the playback session', () => {
+    const tts = new TTSController();
+    expect(tts.sessionId).toBe(0);
+
+    tts.load(makeSentences(2), { chapterIndex: 4 });
+
+    expect(tts.chapterIndex).toBe(4);
+    expect(tts.sessionId).toBe(1);
+  });
 });
 
 // ── play ──────────────────────────────────────────────────────────────────────
@@ -127,6 +137,24 @@ describe('TTSController.play', () => {
     tts.load(makeSentences());
     tts.play();
     expect(states).toContain('playing');
+  });
+
+  it('notifies playback metadata with the state', () => {
+    const tts = new TTSController();
+    const events = [];
+    tts.onStateChange = (state, event) => events.push({ state, event });
+
+    tts.load(makeSentences(), { chapterIndex: 2 });
+    tts.play();
+
+    expect(events).toContainEqual({
+      state: 'playing',
+      event: {
+        state: 'playing',
+        chapterIndex: 2,
+        sessionId: 1,
+      },
+    });
   });
 
   it('does not double-start when already playing', () => {

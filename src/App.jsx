@@ -20,13 +20,14 @@ export default function App() {
   const [voiceURI, setVoiceURI] = useState(() => localStorage.getItem('tts-voice') ?? '');
 
   const pendingAutoPlay = useRef(false);
+  const handledEndedSession = useRef(null);
 
   const { chapterIndex } = useParams();
   const navigate = useNavigate();
 
   const { toast, showToast } = useToast();
   const { book, currentIndex, chapterHtml, isLoading, openFile, goToChapter, restoreBook } = useBook();
-  const { ttsState, load, play, pause, stop, setRate, setVoice, getVoices, playFrom } = useTTS();
+  const { ttsState, ttsInfo, load, play, pause, stop, setRate, setVoice, getVoices, playFrom } = useTTS();
   const allVoices = useVoices();
 
   const currentChapter = book?.chapters[currentIndex] ?? null;
@@ -58,12 +59,12 @@ export default function App() {
   }, [navigate, stop]);
 
   const handleSentencesReady = useCallback((sentences) => {
-    load(sentences);
-    if (pendingAutoPlay.current) {
+    load(sentences, { chapterIndex: currentIndex });
+    if (pendingAutoPlay.current === currentIndex) {
       pendingAutoPlay.current = false;
       play();
     }
-  }, [load, play]);
+  }, [currentIndex, load, play]);
 
   const handleSentenceClick = useCallback((index) => {
     playFrom(index);
@@ -105,10 +106,13 @@ export default function App() {
   // Auto-advance to next chapter when TTS finishes
   useEffect(() => {
     if (ttsState !== 'ended' || !book) return;
+    if (ttsInfo?.chapterIndex !== currentIndex) return;
+    if (handledEndedSession.current === ttsInfo.sessionId) return;
     if (currentIndex >= book.chapters.length - 1) return;
-    pendingAutoPlay.current = true;
+    handledEndedSession.current = ttsInfo.sessionId;
+    pendingAutoPlay.current = currentIndex + 1;
     navigate('/' + (currentIndex + 1), { replace: true });
-  }, [ttsState, book, currentIndex, navigate]);
+  }, [ttsState, ttsInfo, book, currentIndex, navigate]);
 
   // Keyboard shortcuts
   useEffect(() => {

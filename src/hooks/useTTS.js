@@ -7,17 +7,25 @@ export function useTTS() {
     controllerRef.current = new TTSController();
   }
   const [ttsState, setTtsState] = useState('stopped');
+  const [ttsInfo, setTtsInfo] = useState({
+    state: 'stopped',
+    chapterIndex: null,
+    sessionId: 0,
+  });
 
   useEffect(() => {
     const ctrl = controllerRef.current;
-    ctrl.onStateChange = setTtsState;
+    ctrl.onStateChange = (state, info) => {
+      setTtsState(state);
+      setTtsInfo(info);
+    };
     return () => {
       ctrl.stop();
       ctrl.onStateChange = null;
     };
   }, []);
 
-  const load    = useCallback((sentences) => controllerRef.current.load(sentences), []);
+  const load    = useCallback((sentences, context) => controllerRef.current.load(sentences, context), []);
   const play    = useCallback(() => controllerRef.current.play(), []);
   const pause   = useCallback(() => controllerRef.current.pause(), []);
   const stop    = useCallback(() => controllerRef.current.stop(), []);
@@ -26,5 +34,5 @@ export function useTTS() {
   const getVoices = useCallback((lang) => controllerRef.current.getVoices(lang), []);
   const playFrom = useCallback((index) => controllerRef.current.playFrom(index), []);
 
-  return { ttsState, load, play, pause, stop, setRate, setVoice, getVoices, playFrom };
+  return { ttsState, ttsInfo, load, play, pause, stop, setRate, setVoice, getVoices, playFrom };
 }

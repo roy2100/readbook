@@ -10,14 +10,18 @@ export class TTSController {
     this.isPlaying = false;
     this.isPaused = false;
     this.pausedIndex = 0;
+    this.chapterIndex = null;
+    this.sessionId = 0;
     this.onStateChange = null;
     this._keepAliveTimer = null;
   }
 
-  load(sentences) {
+  load(sentences, context = {}) {
     this.stop();
     this.queue = sentences;
     this.currentIndex = 0;
+    this.chapterIndex = context.chapterIndex ?? null;
+    this.sessionId += 1;
   }
 
   play() {
@@ -150,7 +154,12 @@ export class TTSController {
   }
 
   _notify(state) {
-    if (this.onStateChange) this.onStateChange(state);
+    if (!this.onStateChange) return;
+    this.onStateChange(state, {
+      state,
+      chapterIndex: this.chapterIndex,
+      sessionId: this.sessionId,
+    });
   }
 }
 

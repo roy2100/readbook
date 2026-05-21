@@ -18,6 +18,8 @@ class MockUtterance {
 let mockSynth;
 
 beforeEach(() => {
+  delete window.speechUtterances;
+
   mockSynth = {
     speak: vi.fn(),
     cancel: vi.fn(),
@@ -163,6 +165,42 @@ describe('TTSController.play', () => {
     tts.play();
     tts.play();  // second call should be a no-op
     expect(mockSynth.speak).toHaveBeenCalledOnce();
+  });
+});
+
+// ── SpeechSynthesisUtterance retention ───────────────────────────────────────
+
+describe('TTSController — utterance retention', () => {
+  it('keeps the active utterance in a global array while speaking', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences());
+    tts.play();
+
+    const utt = getLastUtterance();
+    expect(window.speechUtterances).toEqual([utt]);
+  });
+
+  it('releases the finished utterance and retains the next one', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences(2));
+    tts.play();
+
+    const first = getLastUtterance();
+    first.onend();
+
+    const second = getLastUtterance();
+    expect(window.speechUtterances).toEqual([second]);
+    expect(window.speechUtterances).not.toContain(first);
+  });
+
+  it('releases the active utterance when playback stops', () => {
+    const tts = new TTSController();
+    tts.load(makeSentences());
+    tts.play();
+
+    tts.stop();
+
+    expect(window.speechUtterances).toEqual([]);
   });
 });
 

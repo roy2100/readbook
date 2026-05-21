@@ -1,5 +1,15 @@
 import { highlight, clearHighlight } from './highlighter.js';
 
+function retainUtterance(utterance) {
+  window.speechUtterances = window.speechUtterances || [];
+  window.speechUtterances.push(utterance);
+}
+
+function releaseUtterance(utterance) {
+  if (!window.speechUtterances) return;
+  window.speechUtterances = window.speechUtterances.filter(u => u !== utterance);
+}
+
 export class TTSController {
   constructor() {
     this.synth = window.speechSynthesis;
@@ -13,6 +23,7 @@ export class TTSController {
     this.chapterIndex = null;
     this.sessionId = 0;
     this.onStateChange = null;
+    this.currentUtterance = null;
   }
 
   load(sentences, context = {}) {
@@ -45,6 +56,7 @@ export class TTSController {
   playFrom(index) {
     if (this.queue.length === 0 || index < 0 || index >= this.queue.length) return;
     this.synth.cancel();
+    this._releaseCurrentUtterance();
     this.isPlaying = true;
     this.isPaused = false;
     this._speakFrom(index);
@@ -57,12 +69,14 @@ export class TTSController {
     this.isPlaying = false;
     this.isPaused = true;
     this.synth.cancel();
+    this._releaseCurrentUtterance();
     clearHighlight();
     this._notify('paused');
   }
 
   stop() {
     this.synth.cancel();
+    this._releaseCurrentUtterance();
     this.isPlaying = false;
     this.isPaused = false;
     this.currentIndex = 0;
@@ -76,6 +90,7 @@ export class TTSController {
     if (this.isPlaying) {
       const idx = this.currentIndex;
       this.synth.cancel();
+      this._releaseCurrentUtterance();
       this._speakFrom(idx);
     }
   }
@@ -86,6 +101,7 @@ export class TTSController {
     if (this.isPlaying) {
       const idx = this.currentIndex;
       this.synth.cancel();
+      this._releaseCurrentUtterance();
       this._speakFrom(idx);
     }
   }
@@ -100,8 +116,15 @@ export class TTSController {
     });
   }
 
+  _releaseCurrentUtterance() {
+    if (!this.currentUtterance) return;
+    releaseUtterance(this.currentUtterance);
+    this.currentUtterance = null;
+  }
+
   _speakFrom(startIndex) {
     if (startIndex >= this.queue.length) {
+      this._releaseCurrentUtterance();
       this.isPlaying = false;
       clearHighlight();
       this._notify('ended');
@@ -118,16 +141,22 @@ export class TTSController {
     utt.onstart = () => highlight(el);
 
     utt.onend = () => {
+      if (this.currentUtterance !== utt) return;
+      this._releaseCurrentUtterance();
       if (!this.isPlaying) return;
       this._speakFrom(startIndex + 1);
     };
 
     utt.onerror = (e) => {
+      if (this.currentUtterance !== utt) return;
+      this._releaseCurrentUtterance();
       if (e.error === 'interrupted' || e.error === 'canceled') return;
       console.warn('TTS error:', e.error, 'sentence:', startIndex);
       if (this.isPlaying) this._speakFrom(startIndex + 1);
     };
 
+    this.currentUtterance = utt;
+    retainUtterance(utt);
     this.synth.speak(utt);
   }
 
